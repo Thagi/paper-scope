@@ -1,62 +1,67 @@
 # Makefile for Paper Scope project automation
 
-PYTHON ?= python3.11
-POETRY ?= poetry
 PODMAN_COMPOSE ?= podman-compose
+COMPOSE_FILE ?= infra/podman-compose.yml
+BACKEND_SERVICE := backend
+FRONTEND_SERVICE := frontend
 BACKEND_DIR := backend
 FRONTEND_DIR := frontend
+
+BACKEND_RUN := $(PODMAN_COMPOSE) -f $(COMPOSE_FILE) run --rm $(BACKEND_SERVICE)
+FRONTEND_RUN := $(PODMAN_COMPOSE) -f $(COMPOSE_FILE) run --rm $(FRONTEND_SERVICE)
 
 .PHONY: help install-backend install-frontend install-all backend-dev backend-test frontend-dev compose-up compose-down compose-logs format-backend format-frontend lint-backend clean
 
 help:
-@echo "Paper Scope helper targets"
-@echo "  make install-backend   Install backend dependencies with poetry"
-@echo "  make install-frontend  Install frontend dependencies via pip"
-@echo "  make install-all       Install dependencies for both backend and frontend"
-@echo "  make backend-dev       Run the FastAPI backend with uvicorn"
-@echo "  make frontend-dev      Run the Streamlit frontend app"
-@echo "  make backend-test      Execute backend pytest suite"
-@echo "  make format-backend    Format backend Python code with black & isort"
-@echo "  make format-frontend   Format frontend Python code with black"
-@echo "  make compose-up        Build and start the full stack via podman-compose"
-@echo "  make compose-down      Stop the podman-compose stack"
-@echo "  make compose-logs      Tail logs from the compose stack"
+	@echo "Paper Scope helper targets (container-native workflow)"
+	@echo "  make install-backend   Build the backend image and install dependencies"
+	@echo "  make install-frontend  Build the frontend image and install dependencies"
+	@echo "  make install-all       Build backend and frontend images"
+	@echo "  make backend-dev       Run the FastAPI backend via podman-compose"
+	@echo "  make frontend-dev      Run the Streamlit frontend via podman-compose"
+	@echo "  make backend-test      Execute backend pytest suite inside the container"
+	@echo "  make format-backend    Format backend Python code inside the container"
+	@echo "  make format-frontend   Format frontend Python code inside the container"
+	@echo "  make compose-up        Build and start the full stack via podman-compose"
+	@echo "  make compose-down      Stop the podman-compose stack"
+	@echo "  make compose-logs      Tail logs from the compose stack"
 
 install-backend:
-cd $(BACKEND_DIR) && $(POETRY) install
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) build $(BACKEND_SERVICE)
 
 install-frontend:
-$(PYTHON) -m pip install --upgrade pip
-$(PYTHON) -m pip install -r $(FRONTEND_DIR)/requirements.txt black
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) build $(FRONTEND_SERVICE)
 
 install-all: install-backend install-frontend
 
 backend-dev:
-cd $(BACKEND_DIR) && $(POETRY) run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) up $(BACKEND_SERVICE)
 
 frontend-dev:
-cd $(FRONTEND_DIR) && streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) up $(FRONTEND_SERVICE)
 
 backend-test:
-cd $(BACKEND_DIR) && $(POETRY) run pytest
+	$(BACKEND_RUN) poetry run pytest
 
 format-backend:
-cd $(BACKEND_DIR) && $(POETRY) run isort app tests && $(POETRY) run black app tests
+	$(BACKEND_RUN) poetry run isort app tests
+	$(BACKEND_RUN) poetry run black app tests
 
 format-frontend:
-cd $(FRONTEND_DIR) && black .
+	$(FRONTEND_RUN) black frontend
 
 lint-backend:
-cd $(BACKEND_DIR) && $(POETRY) run black --check app tests && $(POETRY) run isort --check-only app tests
+	$(BACKEND_RUN) poetry run black --check app tests
+	$(BACKEND_RUN) poetry run isort --check-only app tests
 
 compose-up:
-$(PODMAN_COMPOSE) -f infra/podman-compose.yml up --build -d
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) up --build -d
 
 compose-down:
-$(PODMAN_COMPOSE) -f infra/podman-compose.yml down
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) down
 
 compose-logs:
-$(PODMAN_COMPOSE) -f infra/podman-compose.yml logs -f
+	$(PODMAN_COMPOSE) -f $(COMPOSE_FILE) logs -f
 
 clean:
-rm -rf $(BACKEND_DIR)/.pytest_cache $(BACKEND_DIR)/.mypy_cache $(FRONTEND_DIR)/__pycache__
+	rm -rf $(BACKEND_DIR)/.pytest_cache $(BACKEND_DIR)/.mypy_cache $(FRONTEND_DIR)/__pycache__

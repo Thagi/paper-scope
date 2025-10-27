@@ -114,25 +114,24 @@ Paper Scope is a research intelligence platform that automatically collects tren
 
 ### Prerequisites
 
-- Python 3.11
-- [Poetry](https://python-poetry.org/) for backend dependency management
 - Podman with the `podman-compose` plugin (or Docker Compose; see notes below)
+- Optional: Python 3.11 and [Poetry](https://python-poetry.org/) if you prefer to run the backend without containers.
 
 ### Using the Makefile
 
 Common development actions are wrapped in a top-level `Makefile`:
 
 ```bash
-# Install backend (Poetry) and frontend (pip) dependencies
+# Build backend and frontend images (installs dependencies inside containers)
 make install-all
 
-# Run the FastAPI backend with live reload on http://localhost:8000
+# Run the FastAPI backend (attached; press Ctrl+C to stop)
 make backend-dev
 
-# Launch the Streamlit frontend on http://localhost:8501
+# Launch the Streamlit frontend (starts backend automatically via depends_on)
 make frontend-dev
 
-# Execute backend unit tests
+# Execute backend unit tests inside the backend container
 make backend-test
 
 # Start the full stack (frontend, backend, Nginx, Neo4j, etc.) via podman-compose
@@ -150,9 +149,9 @@ make compose-up PODMAN_COMPOSE="docker compose"
 
 ### Manual Workflow
 
-1. Clone the repository and install dev dependencies for backend and frontend (via `make install-all`).
+1. Clone the repository and build the service images (via `make install-all`).
 2. Use `make compose-up` to start services locally or run `make backend-dev`/`make frontend-dev` for individual components.
-3. Access the UI at `https://localhost/` when running the full stack behind Nginx, or use the direct service URLs when running components individually (`http://localhost:8501` for Streamlit, `http://localhost:8000/api/health` for the backend).
+3. Access the UI at `http://localhost:8080/` when running the full stack behind Nginx, or use the direct service URLs when running components individually (`http://localhost:8501` for Streamlit, `http://localhost:8000/api/health` for the backend).
 4. Run backend unit tests with `make backend-test`.
 5. Use `scripts/run_ingest.py --once` for manual ingestion during development.
 
