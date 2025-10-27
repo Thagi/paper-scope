@@ -81,12 +81,23 @@ Paper Scope is a research intelligence platform that automatically collects tren
 ## Configuration & Deployment
 
 1. **Environment Variables**
-   - `LLM_PROVIDER` (`ollama` or `openai`)
-   - `OLLAMA_MODEL` / `OPENAI_MODEL`
-   - `OPENAI_API_KEY` (if using OpenAI)
-   - `TREND_SOURCES` (comma-separated list of crawler modules to activate)
-   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`
-   - `SCHEDULER_CRON` (e.g., `0 3 * * *`)
+
+   Runtime configuration for the backend is loaded from a `.env` file in the
+   repository root. An example is provided as `.env.example`—copy it and update
+   the values before starting the services:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   | Variable | Description |
+   | --- | --- |
+   | `PAPER_SCOPE_OPENAI_API_KEY` | Required when enabling OpenAI-powered enrichment workflows. Leave blank to disable features that depend on OpenAI. |
+   | `PAPER_SCOPE_SCHEDULER_TIMEZONE` | Optional override for the APScheduler timezone (defaults to `UTC`). |
+
+   Additional integrations (Neo4j connection, crawler configuration, etc.) will
+   introduce more environment switches as those features are implemented. Each
+   new variable will be documented in the example file.
 
 2. **Podman Compose Services**
    - `frontend`: Streamlit app served via Nginx upstream.
