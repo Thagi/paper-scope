@@ -81,12 +81,23 @@ Paper Scope is a research intelligence platform that automatically collects tren
 ## Configuration & Deployment
 
 1. **Environment Variables**
-   - `LLM_PROVIDER` (`ollama` or `openai`)
-   - `OLLAMA_MODEL` / `OPENAI_MODEL`
-   - `OPENAI_API_KEY` (if using OpenAI)
-   - `TREND_SOURCES` (comma-separated list of crawler modules to activate)
-   - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD`
-   - `SCHEDULER_CRON` (e.g., `0 3 * * *`)
+
+   Runtime configuration for the backend is loaded from a `.env` file in the
+   repository root. An example is provided as `.env.example`—copy it and update
+   the values before starting the services:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   | Variable | Description |
+   | --- | --- |
+   | `PAPER_SCOPE_OPENAI_API_KEY` | Required when enabling OpenAI-powered enrichment workflows. Leave blank to disable features that depend on OpenAI. |
+   | `PAPER_SCOPE_SCHEDULER_TIMEZONE` | Optional override for the APScheduler timezone (defaults to `UTC`). |
+
+   Additional integrations (Neo4j connection, crawler configuration, etc.) will
+   introduce more environment switches as those features are implemented. Each
+   new variable will be documented in the example file.
 
 2. **Podman Compose Services**
    - `frontend`: Streamlit app served via Nginx upstream.
@@ -101,10 +112,47 @@ Paper Scope is a research intelligence platform that automatically collects tren
 
 ## Development Workflow
 
-1. Clone the repository and install dev dependencies for backend and frontend.
-2. Use `podman-compose up --build` to start services locally.
-3. Access the UI at `https://localhost/` (Nginx handles routing to Streamlit and FastAPI).
-4. Run backend unit tests with `poetry run pytest` (backend) and `pytest` or `streamlit` checks for frontend components.
+### Prerequisites
+
+- Podman with the `podman-compose` plugin (or Docker Compose; see notes below)
+- Optional: Python 3.11 and [Poetry](https://python-poetry.org/) if you prefer to run the backend without containers.
+
+### Using the Makefile
+
+Common development actions are wrapped in a top-level `Makefile`:
+
+```bash
+# Build backend and frontend images (installs dependencies inside containers)
+make install-all
+
+# Run the FastAPI backend (attached; press Ctrl+C to stop)
+make backend-dev
+
+# Launch the Streamlit frontend (starts backend automatically via depends_on)
+make frontend-dev
+
+# Execute backend unit tests inside the backend container
+make backend-test
+
+# Start the full stack (frontend, backend, Nginx, Neo4j, etc.) via podman-compose
+make compose-up
+
+# Stop the running compose stack
+make compose-down
+```
+
+Pass a different compose runner by overriding `PODMAN_COMPOSE`. For example, to use Docker Compose:
+
+```bash
+make compose-up PODMAN_COMPOSE="docker compose"
+```
+
+### Manual Workflow
+
+1. Clone the repository and build the service images (via `make install-all`).
+2. Use `make compose-up` to start services locally or run `make backend-dev`/`make frontend-dev` for individual components.
+3. Access the UI at `http://localhost:8080/` when running the full stack behind Nginx, or use the direct service URLs when running components individually (`http://localhost:8501` for Streamlit, `http://localhost:8000/api/health` for the backend).
+4. Run backend unit tests with `make backend-test`.
 5. Use `scripts/run_ingest.py --once` for manual ingestion during development.
 
 ## Future Enhancements
