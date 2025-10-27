@@ -101,10 +101,48 @@ Paper Scope is a research intelligence platform that automatically collects tren
 
 ## Development Workflow
 
-1. Clone the repository and install dev dependencies for backend and frontend.
-2. Use `podman-compose up --build` to start services locally.
-3. Access the UI at `https://localhost/` (Nginx handles routing to Streamlit and FastAPI).
-4. Run backend unit tests with `poetry run pytest` (backend) and `pytest` or `streamlit` checks for frontend components.
+### Prerequisites
+
+- Python 3.11
+- [Poetry](https://python-poetry.org/) for backend dependency management
+- Podman with the `podman-compose` plugin (or Docker Compose; see notes below)
+
+### Using the Makefile
+
+Common development actions are wrapped in a top-level `Makefile`:
+
+```bash
+# Install backend (Poetry) and frontend (pip) dependencies
+make install-all
+
+# Run the FastAPI backend with live reload on http://localhost:8000
+make backend-dev
+
+# Launch the Streamlit frontend on http://localhost:8501
+make frontend-dev
+
+# Execute backend unit tests
+make backend-test
+
+# Start the full stack (frontend, backend, Nginx, Neo4j, etc.) via podman-compose
+make compose-up
+
+# Stop the running compose stack
+make compose-down
+```
+
+Pass a different compose runner by overriding `PODMAN_COMPOSE`. For example, to use Docker Compose:
+
+```bash
+make compose-up PODMAN_COMPOSE="docker compose"
+```
+
+### Manual Workflow
+
+1. Clone the repository and install dev dependencies for backend and frontend (via `make install-all`).
+2. Use `make compose-up` to start services locally or run `make backend-dev`/`make frontend-dev` for individual components.
+3. Access the UI at `https://localhost/` when running the full stack behind Nginx, or use the direct service URLs when running components individually (`http://localhost:8501` for Streamlit, `http://localhost:8000/api/health` for the backend).
+4. Run backend unit tests with `make backend-test`.
 5. Use `scripts/run_ingest.py --once` for manual ingestion during development.
 
 ## Future Enhancements
