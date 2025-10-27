@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "paper-scope-backend"
+version = "0.1.0"
+description = "FastAPI backend for Paper Scope"
+authors = ["Paper Scope Team <research@paperscope.ai>"]
+readme = "../README.md"
+packages = [{ include = "backend" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.0"
+uvicorn = { extras = ["standard"], version = "^0.24.0" }
+pydantic-settings = "^2.0.3"
+apscheduler = "^3.10.4"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.3"
+pytest-asyncio = "^0.21.1"
+httpx = "^0.25.1"
+
+[build-system]
+requires = ["poetry-core>=1.6.1"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
