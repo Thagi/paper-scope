@@ -8,6 +8,7 @@ import streamlit as st
 from components.dashboard import render_dashboard
 from components.pdf_viewer import render_pdf_viewer
 from components.graphs import render_graph_overview
+from components.paper_browser import render_paper_browser
 from services.backend import get_backend_client
 
 
@@ -16,6 +17,8 @@ client = get_backend_client()
 
 if "selected_paper" not in st.session_state:
     st.session_state["selected_paper"] = None
+if "selected_paper_id" not in st.session_state:
+    st.session_state["selected_paper_id"] = None
 if "last_ingestion" not in st.session_state:
     st.session_state["last_ingestion"] = None
 
@@ -44,7 +47,9 @@ def load_pdf_bytes(paper_id: str) -> bytes | None:
 
 
 st.title("📚 Paper Scope")
-st.caption("Monitor trending research, summarize insights, and explore knowledge graphs.")
+st.caption(
+    "Monitor trending research, summarize insights, and explore knowledge graphs."
+)
 
 with st.sidebar:
     st.header("Ingestion Controls")
@@ -75,10 +80,13 @@ except httpx.HTTPError as exc:
 
 render_dashboard(papers, last_ingestion=st.session_state.get("last_ingestion"))
 
-paper_options = {paper["title"]: paper["paper_id"] for paper in papers}
-selected_label = st.selectbox("Select a paper", list(paper_options.keys()) or ["None"], index=0)
-selected_id = paper_options.get(selected_label)
-selected_paper = next((paper for paper in papers if paper["paper_id"] == selected_id), None)
+selected_id = render_paper_browser(
+    papers, selected_id=st.session_state.get("selected_paper_id")
+)
+st.session_state["selected_paper_id"] = selected_id
+selected_paper = next(
+    (paper for paper in papers if paper.get("paper_id") == selected_id), None
+)
 st.session_state["selected_paper"] = selected_paper
 
 paper_graph = None
@@ -100,4 +108,9 @@ except httpx.HTTPError as exc:
     st.warning(f"Unable to load network graph: {exc}")
     network_graph = None
 
-render_graph_overview(paper_graph, network_graph)
+render_graph_overview(
+    paper_graph,
+    network_graph,
+    papers=papers,
+    selected_paper_id=st.session_state.get("selected_paper_id"),
+)
