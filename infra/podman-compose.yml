@@ -6,18 +6,28 @@ services:
       dockerfile: backend/Dockerfile
     command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
     environment:
-      - PAPER_SCOPE_APP_NAME=Paper Scope API
+      PAPER_SCOPE_APP_NAME: ${PAPER_SCOPE_APP_NAME:-Paper Scope API}
+      PAPER_SCOPE_STORAGE_ROOT: ${PAPER_SCOPE_STORAGE_ROOT:-/data/papers}
+      PAPER_SCOPE_NEO4J_URI: ${PAPER_SCOPE_NEO4J_URI:-bolt://neo4j:7687}
+      PAPER_SCOPE_NEO4J_USER: ${PAPER_SCOPE_NEO4J_USER:-neo4j}
+      PAPER_SCOPE_NEO4J_PASSWORD: ${PAPER_SCOPE_NEO4J_PASSWORD:-changeme123}
+      PAPER_SCOPE_LLM_PROVIDER: ${PAPER_SCOPE_LLM_PROVIDER:-mock}
     volumes:
       - ../:/app
+      - ../storage/papers:/data/papers
     ports:
       - "8000:8000"
     depends_on:
-      - neo4j
+      neo4j:
+        condition: service_healthy
   frontend:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
     command: streamlit run frontend/app.py --server.port=8501 --server.address=0.0.0.0
+    environment:
+      PAPER_SCOPE_BACKEND_URL: ${PAPER_SCOPE_BACKEND_URL:-http://backend:8000/api}
+      PAPER_SCOPE_BACKEND_PUBLIC_URL: ${PAPER_SCOPE_BACKEND_PUBLIC_URL:-/api}
     volumes:
       - ../:/app
     ports:
@@ -35,10 +45,20 @@ services:
   neo4j:
     image: neo4j:5.12
     environment:
-      - NEO4J_AUTH=neo4j/test
+      NEO4J_AUTH: neo4j/${PAPER_SCOPE_NEO4J_PASSWORD:-changeme123}
     volumes:
       - neo4j-data:/data
       - neo4j-logs:/logs
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          cypher-shell -a bolt://localhost:7687 -u neo4j -p ${PAPER_SCOPE_NEO4J_PASSWORD:-changeme123}
+          "RETURN 1;"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 volumes:
   neo4j-data:
   neo4j-logs:

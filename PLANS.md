@@ -2,11 +2,18 @@
 
 This document outlines the phased roadmap for building the Paper Scope platform.
 
+## Status Update
+
+- **Phase 0** baseline scaffolding is complete (FastAPI + Streamlit skeleton with health checks).
+- **Phase 1** initial ingestion pipeline implemented with Hugging Face trending crawler, PDF downloader, Neo4j persistence, and manual trigger endpoint.
+- **Phase 2** core LLM enrichment abstraction delivered with mock, Ollama, and OpenAI providers plus Neo4j graph updates.
+- **Phase 3** Streamlit UI now renders PDF workspace, ingestion dashboard, and graph visualizations backed by live API data.
+
 ## Phase 0 – Repository Bootstrap
 - Scaffold backend (`backend/app`) with FastAPI skeleton, configuration, and health endpoint.
 - Initialize Streamlit app with placeholder pages for ingestion controls, PDF viewer, and graph dashboards.
 - Set up shared tooling: `poetry` for backend, `requirements.txt` for frontend, `pre-commit` hooks (black, isort, mypy, pytest).
-- Create `infra/podman-compose.yml` with services (backend, frontend, nginx, neo4j, ollama) and shared volumes.
+- Create `infra/podman-compose.yml` with services (backend, frontend, nginx, neo4j) and shared volumes, documenting Ollama as an external dependency when needed.
 
 ## Phase 1 – Data Ingestion Pipeline
 1. **Source Connectors**
@@ -51,4 +58,3 @@ This document outlines the phased roadmap for building the Paper Scope platform.
 - Error handling: dead-letter queue or retry mechanism for failed ingestion steps.
 - Security: API authentication for manual triggers, secure secrets management for API keys.
 - Documentation: keep README, architecture diagrams, and API references up to date.
-

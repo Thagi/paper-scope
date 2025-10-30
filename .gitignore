@@ -7,3 +7,5 @@ __pycache__/
 .idea/
 .vscode/
 .DS_Store
+# Local storage for downloaded PDFs
+storage/papers/

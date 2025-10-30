@@ -92,8 +92,15 @@ Paper Scope is a research intelligence platform that automatically collects tren
 
    | Variable | Description |
    | --- | --- |
-   | `PAPER_SCOPE_OPENAI_API_KEY` | Required when enabling OpenAI-powered enrichment workflows. Leave blank to disable features that depend on OpenAI. |
-   | `PAPER_SCOPE_SCHEDULER_TIMEZONE` | Optional override for the APScheduler timezone (defaults to `UTC`). |
+  | `PAPER_SCOPE_STORAGE_ROOT` | Filesystem path mounted inside the backend container where PDFs and metadata are persisted. Defaults to `/data/papers`. |
+  | `PAPER_SCOPE_LLM_PROVIDER` | Select the enrichment backend (`mock`, `ollama`, or `openai`). Defaults to `mock`. |
+  | `PAPER_SCOPE_OPENAI_API_KEY` | Required when enabling OpenAI-powered enrichment workflows. Leave blank to disable features that depend on OpenAI. |
+  | `PAPER_SCOPE_OLLAMA_BASE_URL` | Base URL for the Ollama server when using the local provider. |
+  | `PAPER_SCOPE_OLLAMA_MODEL` | Ollama model name to request for enrichment. |
+  | `PAPER_SCOPE_NEO4J_PASSWORD` | Neo4j authentication password (minimum 8 characters). Defaults to `changeme123`. |
+  | `PAPER_SCOPE_BACKEND_URL` | Base URL the frontend uses to call the backend API. Defaults to `http://backend:8000/api` for container workflows. |
+  | `PAPER_SCOPE_BACKEND_PUBLIC_URL` | Public URL served to browsers for API access. Defaults to `/api`, set to `http://localhost:8080/api` when bypassing nginx. |
+  | `PAPER_SCOPE_SCHEDULER_TIMEZONE` | Optional override for the APScheduler timezone (defaults to `UTC`). |
 
    Additional integrations (Neo4j connection, crawler configuration, etc.) will
    introduce more environment switches as those features are implemented. Each
@@ -104,11 +111,18 @@ Paper Scope is a research intelligence platform that automatically collects tren
    - `backend`: FastAPI app with scheduler, uses Python 3.11-slim image.
    - `nginx`: Reverse proxy container exposing port 443/80 with TLS termination.
    - `neo4j`: Official Neo4j container with mounted data and config volumes.
-   - `ollama` (optional): Ollama server for local LLMs.
+   - External dependency: Start Ollama locally (outside the compose stack) when
+     selecting the Ollama provider. The default base URL
+     `http://host.containers.internal:11434` points to the host bridge from
+     containers; switch to `http://localhost:11434` if you run the backend
+     directly on your machine.
+   - PDF assets are written to `storage/papers/` on the host (bind-mounted into
+     the backend container at `/data/papers`). Each ingestion stores files under
+     `<source>/<year>/<paper_id>/` so you can inspect downloaded PDFs directly
+     from the repository checkout.
 
 3. **Volumes**
-   - `paper-data`: Persist downloaded PDFs and enrichment metadata.
-   - `neo4j-data`, `neo4j-logs`.
+   - `neo4j-data`, `neo4j-logs` for Neo4j persistence.
 
 ## Development Workflow
 
@@ -116,6 +130,8 @@ Paper Scope is a research intelligence platform that automatically collects tren
 
 - Podman with the `podman-compose` plugin (or Docker Compose; see notes below)
 - Optional: Python 3.11 and [Poetry](https://python-poetry.org/) if you prefer to run the backend without containers.
+- Ensure the `storage/papers/` directory exists (a `.gitkeep` placeholder is
+  provided) so PDFs can be inspected locally when the stack is running.
 
 ### Using the Makefile
 
