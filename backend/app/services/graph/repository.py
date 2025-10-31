@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 import re
 from pathlib import Path
@@ -29,7 +30,9 @@ class Neo4jGraphRepository:
         self._driver = driver
 
     @classmethod
-    def from_settings(cls, uri: str, user: str, password: str) -> "Neo4jGraphRepository":
+    def from_settings(
+        cls, uri: str, user: str, password: str
+    ) -> "Neo4jGraphRepository":
         driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
         return cls(driver)
 
@@ -56,7 +59,9 @@ class Neo4jGraphRepository:
 
     async def paper_exists(self, external_id: str) -> bool:
         async with self._driver.session() as session:
-            return await session.execute_read(self._paper_exists_tx, external_id=external_id)
+            return await session.execute_read(
+                self._paper_exists_tx, external_id=external_id
+            )
 
     async def upsert_paper(
         self,
@@ -99,11 +104,15 @@ class Neo4jGraphRepository:
 
     async def get_paper(self, external_id: str) -> StoredPaper | None:
         async with self._driver.session() as session:
-            return await session.execute_read(self._get_paper_tx, external_id=external_id)
+            return await session.execute_read(
+                self._get_paper_tx, external_id=external_id
+            )
 
     async def get_paper_graph(self, external_id: str) -> PaperGraph:
         async with self._driver.session() as session:
-            return await session.execute_read(self._get_paper_graph_tx, external_id=external_id)
+            return await session.execute_read(
+                self._get_paper_graph_tx, external_id=external_id
+            )
 
     async def get_paper_network(self, limit: int) -> PaperGraph:
         async with self._driver.session() as session:
@@ -142,8 +151,12 @@ class Neo4jGraphRepository:
                     landing_url=node.get("landing_url"),
                     tags=node.get("tags", []),
                     authors=node.get("authors", []),
-                    published_at=Neo4jGraphRepository._coerce_datetime(node.get("published_at")),
-                    storage_path=Path(node.get("storage_path")) if node.get("storage_path") else None,
+                    published_at=Neo4jGraphRepository._coerce_datetime(
+                        node.get("published_at")
+                    ),
+                    storage_path=Path(node.get("storage_path"))
+                    if node.get("storage_path")
+                    else None,
                     key_points=node.get("key_points", []),
                 )
             )
@@ -167,8 +180,12 @@ class Neo4jGraphRepository:
             landing_url=node.get("landing_url"),
             tags=node.get("tags", []),
             authors=node.get("authors", []),
-            published_at=Neo4jGraphRepository._coerce_datetime(node.get("published_at")),
-            storage_path=Path(node.get("storage_path")) if node.get("storage_path") else None,
+            published_at=Neo4jGraphRepository._coerce_datetime(
+                node.get("published_at")
+            ),
+            storage_path=Path(node.get("storage_path"))
+            if node.get("storage_path")
+            else None,
             key_points=node.get("key_points", []),
         )
 
@@ -190,43 +207,37 @@ class Neo4jGraphRepository:
         related_nodes = [node for node in record["nodes"] if node]
         relationships = [rel for rel in record["rels"] if rel]
 
-        nodes = [
-            GraphNode(
-                id=paper_node["external_id"],
-                label=paper_node.get("title", "Paper"),
-                type="Paper",
-                metadata={
-                    "summary": paper_node.get("summary"),
-                    "tags": paper_node.get("tags", []),
-                },
-            )
-        ]
+        element_to_graph_id: dict[str, str] = {}
+        node_map: dict[str, GraphNode] = {}
+
+        element_id, graph_node = Neo4jGraphRepository._graph_node_from_record(
+            paper_node
+        )
+        element_to_graph_id[element_id] = graph_node.id
+        node_map[graph_node.id] = graph_node
+
         for node in related_nodes:
-            label = node.get("name") or node.get("title") or node.element_id
-            node_type = next(iter(node.labels), "Entity")
-            nodes.append(
-                GraphNode(
-                    id=node["external_id"] if "external_id" in node else node.element_id,
-                    label=label,
-                    type=node_type,
-                    metadata={"tags": node.get("tags", [])},
-                )
-            )
+            element_id, graph_node = Neo4jGraphRepository._graph_node_from_record(node)
+            element_to_graph_id[element_id] = graph_node.id
+            node_map.setdefault(graph_node.id, graph_node)
 
         edges: list[GraphEdge] = []
         for rel in relationships:
+            source_id = element_to_graph_id.get(rel.start_node.element_id)
+            target_id = element_to_graph_id.get(rel.end_node.element_id)
+            if not source_id or not target_id:
+                continue
+            metadata = Neo4jGraphRepository._clean_metadata(dict(rel))
             edges.append(
                 GraphEdge(
                     id=rel.element_id,
-                    source=rel.start_node["external_id"],
-                    target=rel.end_node.get("external_id")
-                    or rel.end_node.get("name")
-                    or rel.end_node.element_id,
+                    source=source_id,
+                    target=target_id,
                     type=rel.type,
-                    metadata=dict(rel),
+                    metadata=metadata,
                 )
             )
-        return PaperGraph(nodes=nodes, edges=edges)
+        return PaperGraph(nodes=list(node_map.values()), edges=edges)
 
     @staticmethod
     async def _get_paper_network_tx(tx, *, limit: int) -> PaperGraph:
@@ -239,56 +250,102 @@ class Neo4jGraphRepository:
             """,
             limit=limit,
         )
+        element_to_graph_id: dict[str, str] = {}
         node_map: dict[str, GraphNode] = {}
-        edges: list[GraphEdge] = []
+        concept_edges: dict[tuple[str, str], dict[str, Any]] = {}
+        pair_concepts: defaultdict[tuple[str, str], set[str]] = defaultdict(set)
+
         async for record in result:
             paper = record["p"]
             other = record["other"]
             concept = record["c"]
             rel = record["r"]
             rel_other = record["r2"]
-            for node, label, node_type in (
-                (paper, paper.get("title", "Paper"), "Paper"),
-                (other, other.get("title", "Paper"), "Paper"),
-                (concept, concept.get("name", "Concept"), "Concept"),
-            ):
-                node_id = node.get("external_id") or node.get("name") or node.element_id
-                if node_id not in node_map:
-                        metadata = {"tags": node.get("tags", [])}
-                        if node_type == "Paper":
-                            metadata["summary"] = node.get("summary")
-                            published = Neo4jGraphRepository._coerce_datetime(node.get("published_at"))
-                            metadata["published_at"] = published.isoformat() if published else None
-                        node_map[node_id] = GraphNode(
-                            id=node_id,
-                            label=label,
-                            type=node_type,
-                            metadata=metadata,
-                    )
+
+            for node in (paper, other, concept):
+                element_id, graph_node = Neo4jGraphRepository._graph_node_from_record(
+                    node
+                )
+                element_to_graph_id[element_id] = graph_node.id
+                node_map.setdefault(graph_node.id, graph_node)
+
+            paper_id = element_to_graph_id.get(paper.element_id)
+            other_id = element_to_graph_id.get(other.element_id)
+            concept_id = element_to_graph_id.get(concept.element_id)
+
+            if paper_id and concept_id:
+                key = (paper_id, concept_id)
+                payload = concept_edges.setdefault(
+                    key,
+                    {
+                        "source": paper_id,
+                        "target": concept_id,
+                        "relations": set(),
+                    },
+                )
+                payload["relations"].add(dict(rel).get("relation") or rel.type)
+
+            if other_id and concept_id:
+                key = (other_id, concept_id)
+                payload = concept_edges.setdefault(
+                    key,
+                    {
+                        "source": other_id,
+                        "target": concept_id,
+                        "relations": set(),
+                    },
+                )
+                relation_value = None
+                if rel_other is not None:
+                    relation_value = dict(rel_other).get("relation") or rel_other.type
+                payload["relations"].add(relation_value or "RELATES_TO")
+
+            if paper_id and other_id and concept_id:
+                concept_node = node_map.get(concept_id)
+                concept_label = concept_node.label if concept_node else concept_id
+                pair_key = tuple(sorted((paper_id, other_id)))
+                pair_concepts[pair_key].add(concept_label)
+
+        edges: list[GraphEdge] = []
+        for payload in concept_edges.values():
+            relations = sorted(rel for rel in payload["relations"] if rel)
+            metadata: dict[str, Any] = {}
+            if relations:
+                metadata["relations"] = relations
             edges.append(
                 GraphEdge(
-                    id=rel.element_id,
-                    source=paper.get("external_id"),
-                    target=concept.get("name") or concept.element_id,
+                    id=f"{payload['source']}->{payload['target']}",
+                    source=payload["source"],
+                    target=payload["target"],
                     type="RELATES_TO",
-                    metadata={"relation": rel.get("relation")},
+                    metadata=metadata,
                 )
             )
+
+        for (paper_id, other_id), shared_concepts in pair_concepts.items():
+            metadata = {
+                "shared_concepts": sorted(shared_concepts),
+                "weight": len(shared_concepts),
+            }
             edges.append(
                 GraphEdge(
-                    id=f"{rel.element_id}-other",
-                    source=other.get("external_id"),
-                    target=concept.get("name") or concept.element_id,
-                    type="RELATES_TO",
-                    metadata={"relation": rel_other.get("relation") if rel_other else "RELATES_TO"},
+                    id=f"{paper_id}:::{other_id}",
+                    source=paper_id,
+                    target=other_id,
+                    type="SHARES_CONCEPT",
+                    metadata=metadata,
                 )
             )
+
         return PaperGraph(nodes=list(node_map.values()), edges=edges)
 
     @staticmethod
-    async def _upsert_paper_tx(tx, *, record: dict, analysis: dict, storage_path: str) -> None:
-        await (await tx.run(
-            """
+    async def _upsert_paper_tx(
+        tx, *, record: dict, analysis: dict, storage_path: str
+    ) -> None:
+        await (
+            await tx.run(
+                """
             MERGE (p:Paper {external_id: $record.external_id})
             SET p.title = $record.title,
                 p.abstract = $record.abstract,
@@ -327,15 +384,65 @@ class Neo4jGraphRepository:
             MERGE (p)-[r:RELATES_TO {relation: coalesce(rel.relation, 'RELATED')}]->(target)
             SET r.source = rel.source
             """,
-            record=record,
-            analysis=analysis,
-            storage_path=storage_path,
-        )).consume()
+                record=record,
+                analysis=analysis,
+                storage_path=storage_path,
+            )
+        ).consume()
 
     @staticmethod
     def _normalize_concept_name(name: str) -> str:
         slug = _NORMALIZE_PATTERN.sub("-", name.lower()).strip("-")
         return slug or name.lower()
+
+    @staticmethod
+    def _graph_node_from_record(node) -> tuple[str, GraphNode]:  # type: ignore[no-untyped-def]
+        labels = {label for label in getattr(node, "labels", [])}
+        node_type = "Entity"
+        node_id = node.get("external_id") or node.get("name") or node.element_id
+        label = node.get("title") or node.get("name") or node_id
+        metadata: dict[str, Any] = {"tags": node.get("tags", [])}
+
+        if "Paper" in labels:
+            node_type = "Paper"
+            node_id = node.get("external_id") or node.element_id
+            label = node.get("title", node_id)
+            metadata.update(
+                {
+                    "summary": node.get("summary"),
+                    "authors": node.get("authors", []),
+                    "landing_url": node.get("landing_url"),
+                }
+            )
+            published = Neo4jGraphRepository._coerce_datetime(node.get("published_at"))
+            if published:
+                metadata["published_at"] = published.isoformat()
+        elif "Author" in labels:
+            node_type = "Author"
+            node_id = node.get("name") or node.element_id
+            label = node.get("name", node_id)
+            metadata = {}
+        elif "Concept" in labels:
+            node_type = "Concept"
+            node_id = (
+                node.get("normalized_name")
+                or node.get("name")
+                or node.get("external_id")
+                or node.element_id
+            )
+            label = node.get("name", node_id)
+            metadata.update({"description": node.get("description")})
+
+        clean_metadata = Neo4jGraphRepository._clean_metadata(metadata)
+        return node.element_id, GraphNode(
+            id=node_id, label=label, type=node_type, metadata=clean_metadata
+        )
+
+    @staticmethod
+    def _clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value for key, value in metadata.items() if value not in (None, [], {})
+        }
 
     @staticmethod
     def _coerce_datetime(value: Any) -> datetime | None:
