@@ -9,6 +9,7 @@ import networkx as nx
 import plotly.graph_objects as go
 import streamlit as st
 
+from services.i18n import TranslationManager
 
 def render_graph_overview(
     paper_graph: dict[str, Any] | None,
@@ -16,23 +17,36 @@ def render_graph_overview(
     *,
     papers: list[dict[str, Any]],
     selected_paper_id: str | None,
+    translation: TranslationManager,
 ) -> None:
     """Render paper-level and cross-paper knowledge graphs."""
 
-    st.subheader("Knowledge Graph Explorer")
+    st.subheader(translation.gettext("graph_overview.header"))
     if not paper_graph and not network_graph:
-        st.info("Graph data will appear once papers are ingested and enriched.")
+        st.info(translation.gettext("graph_overview.no_data"))
         return
 
     metrics = st.columns(3)
-    metrics[0].metric("Paper Nodes", _count_nodes(paper_graph, "Paper"))
-    metrics[1].metric("Concept Nodes", _count_nodes(paper_graph, "Concept"))
+    metrics[0].metric(
+        translation.gettext("graph_overview.paper_nodes"),
+        _count_nodes(paper_graph, "Paper"),
+    )
+    metrics[1].metric(
+        translation.gettext("graph_overview.concept_nodes"),
+        _count_nodes(paper_graph, "Concept"),
+    )
     metrics[2].metric(
-        "Cross-Paper Links", _count_edges(network_graph, "SHARES_CONCEPT")
+        translation.gettext("graph_overview.cross_paper_links"),
+        _count_edges(network_graph, "SHARES_CONCEPT"),
     )
 
     focus_paper_id = selected_paper_id or _find_primary_paper_id(paper_graph)
-    selected_tab, network_tab = st.tabs(["Selected Paper Graph", "Cross-Paper Network"])
+    selected_tab, network_tab = st.tabs(
+        [
+            translation.gettext("graph_overview.selected_tab"),
+            translation.gettext("graph_overview.network_tab"),
+        ]
+    )
 
     with selected_tab:
         if paper_graph and paper_graph.get("nodes"):
@@ -43,10 +57,10 @@ def render_graph_overview(
             )
             concept_rows = _extract_concept_rows(paper_graph, focus_paper_id)
             if concept_rows:
-                st.markdown("##### Key Concepts")
+                st.markdown(f"##### {translation.gettext('graph_overview.key_concepts')}")
                 st.dataframe(concept_rows, hide_index=True, use_container_width=True)
         else:
-            st.info("Select a paper to visualise its neighbourhood graph.")
+            st.info(translation.gettext("graph_overview.select_paper_prompt"))
 
     with network_tab:
         if network_graph and network_graph.get("nodes"):
@@ -57,11 +71,11 @@ def render_graph_overview(
             )
             related = _extract_related_papers(network_graph, focus_paper_id, papers)
             if related:
-                _render_related_papers(related)
+                _render_related_papers(related, translation=translation)
             else:
-                st.caption("No overlapping concepts with other papers yet.")
+                st.caption(translation.gettext("graph_overview.no_related"))
         else:
-            st.info("Network data will appear after multiple papers share concepts.")
+            st.info(translation.gettext("graph_overview.network_wait"))
 
 
 def _graph_to_figure(
@@ -298,30 +312,46 @@ def _extract_related_papers(
     return related[:8]
 
 
-def _render_related_papers(related: list[dict[str, Any]]) -> None:
+def _render_related_papers(
+    related: list[dict[str, Any]], *, translation: TranslationManager
+) -> None:
     """Render a list of related papers with quick actions."""
 
-    st.markdown("##### Related Papers")
+    st.markdown(f"##### {translation.gettext('graph_overview.related_papers')}")
     for entry in related:
-        shared_concepts = ", ".join(entry.get("shared_concepts") or []) or "—"
-        published = entry.get("published_at") or "Unknown"
+        shared_concepts = ", ".join(entry.get("shared_concepts") or []) or translation.gettext(
+            "paper_browser.no_tags"
+        )
+        published = entry.get("published_at") or translation.gettext(
+            "paper_browser.unknown_published"
+        )
+        if published == "Unknown":
+            published = translation.gettext("paper_browser.unknown_published")
         with st.container():
             st.markdown(f"**{entry['title']}**")
             st.caption(
-                f"Published: {published} · Shared concepts ({entry['weight']}): {shared_concepts}"
+                translation.gettext(
+                    "graph_overview.published_caption",
+                    published=published,
+                    weight=entry["weight"],
+                    concepts=shared_concepts,
+                )
             )
             if entry.get("summary"):
-                st.write(entry["summary"])
+                st.write(translation.translate_text(entry["summary"]))
             cols = st.columns([3, 1])
             with cols[0]:
                 if entry.get("landing_url"):
                     st.link_button(
-                        "Open landing page",
+                        translation.gettext("graph_overview.open_landing_page"),
                         entry["landing_url"],
                         key=f"landing_{entry['paper_id']}",
                     )
             with cols[1]:
-                if st.button("Focus in app", key=f"focus_{entry['paper_id']}"):
+                if st.button(
+                    translation.gettext("graph_overview.focus_in_app"),
+                    key=f"focus_{entry['paper_id']}",
+                ):
                     st.session_state["selected_paper_id"] = entry["paper_id"]
                     st.experimental_rerun()
 

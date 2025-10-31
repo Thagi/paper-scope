@@ -7,46 +7,54 @@ from typing import Any
 
 import streamlit as st
 
+from services.i18n import TranslationManager
+
 
 def render_paper_browser(
     papers: list[dict[str, Any]],
     *,
     selected_id: str | None,
+    translation: TranslationManager,
 ) -> str | None:
     """Render a searchable browser to pick a paper."""
 
-    st.subheader("Paper Explorer")
+    st.subheader(translation.gettext("paper_browser.header"))
     if not papers:
-        st.info("No papers available yet. Trigger ingestion to populate the catalog.")
+        st.info(translation.gettext("paper_browser.no_papers"))
         return None
 
     search = st.text_input(
-        "Search by title, author, or concept",
+        translation.gettext("paper_browser.search_label"),
         key="paper_search",
-        placeholder="Graph neural networks",
+        placeholder=translation.gettext("paper_browser.search_placeholder"),
     ).strip()
     available_tags = sorted(
         {tag for paper in papers for tag in paper.get("tags", []) if tag}
     )
     tag_filter = st.multiselect(
-        "Filter by tag",
+        translation.gettext("paper_browser.filter_label"),
         available_tags,
         key="paper_tag_filter",
-        placeholder="Select tags to narrow the list",
+        placeholder=translation.gettext("paper_browser.filter_placeholder"),
     )
 
     filtered = _filter_papers(papers, query=search, tags=set(tag_filter))
     sorted_papers = _sort_papers(
         filtered,
         key=st.selectbox(
-            "Sort order",
+            translation.gettext("paper_browser.sort_label"),
             ("Newest", "Oldest", "Title"),
             key="paper_sort_order",
+            format_func=lambda value: {
+                "Newest": translation.gettext("paper_browser.sort_newest"),
+                "Oldest": translation.gettext("paper_browser.sort_oldest"),
+                "Title": translation.gettext("paper_browser.sort_title"),
+            }[value],
         ),
     )
 
     options = {_format_option(paper): paper["paper_id"] for paper in sorted_papers} or {
-        "No matches": None
+        translation.gettext("paper_browser.no_matches"): None
     }
 
     default_index = 0
@@ -54,22 +62,39 @@ def render_paper_browser(
         default_index = list(options.values()).index(selected_id)
 
     selected_label = st.selectbox(
-        "Select a paper",
+        translation.gettext("paper_browser.select_label"),
         list(options.keys()),
         index=default_index,
         key="paper_selector",
     )
-    st.caption(f"{len(filtered)} papers match the current filters.")
+    st.caption(
+        translation.gettext("paper_browser.matching_count", count=len(filtered))
+    )
 
-    preview_rows = [
-        {
-            "Title": paper.get("title", "Untitled"),
-            "Authors": ", ".join(paper.get("authors", [])) or "Unknown",
-            "Published": _format_datetime(paper.get("published_at")),
-            "Tags": ", ".join(paper.get("tags", [])) or "—",
-        }
-        for paper in sorted_papers[:15]
-    ]
+    preview_rows = []
+    for paper in sorted_papers[:15]:
+        authors = ", ".join(paper.get("authors", []))
+        if not authors:
+            authors = translation.gettext("paper_browser.unknown_authors")
+
+        published = _format_datetime(paper.get("published_at"))
+        if published == "Unknown":
+            published = translation.gettext("paper_browser.unknown_published")
+
+        tags = ", ".join(paper.get("tags", []))
+        if not tags:
+            tags = translation.gettext("paper_browser.no_tags")
+
+        preview_rows.append(
+            {
+                translation.gettext("paper_browser.preview_title"): paper.get(
+                    "title", "Untitled"
+                ),
+                translation.gettext("paper_browser.preview_authors"): authors,
+                translation.gettext("paper_browser.preview_published"): published,
+                translation.gettext("paper_browser.preview_tags"): tags,
+            }
+        )
     if preview_rows:
         st.dataframe(preview_rows, use_container_width=True, hide_index=True)
 

@@ -4,3 +4,4 @@ black==23.12.1
 httpx==0.25.1
 pandas==2.1.2
 networkx==3.2.1
+deep-translator==1.11.4
