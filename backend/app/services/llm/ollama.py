@@ -14,6 +14,10 @@ from backend.app.schemas import (
     LLMRelationship,
     PaperRecord,
 )
+from backend.app.services.llm.utils import (
+    build_structured_user_prompt,
+    extract_pdf_excerpt,
+)
 
 from .base import LLMClient
 
@@ -28,11 +32,9 @@ class OllamaLLMClient(LLMClient):
     async def analyze(
         self, record: PaperRecord, *, pdf_path: str | None = None
     ) -> LLMAnalysis:
-        prompt = (
-            "Return JSON with fields summary, key_points, concepts, relationships, chapters summarizing the following paper.\n"
-            f"Title: {record.title}\n"
-            f"Authors: {', '.join(record.authors) if record.authors else 'Unknown'}\n"
-            f"Abstract: {record.abstract or 'Not provided'}\n"
+        pdf_excerpt = extract_pdf_excerpt(pdf_path) if pdf_path else ""
+        prompt = build_structured_user_prompt(
+            record, pdf_excerpt=pdf_excerpt or None
         )
         payload = {
             "model": self._model,

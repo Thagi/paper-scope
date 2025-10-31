@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import streamlit as st
 
 import httpx
@@ -67,7 +69,7 @@ with st.sidebar:
     )
     if selected_language != i18n.language:
         set_language(selected_language)
-        st.experimental_rerun()
+        st.rerun()
 
     st.header(i18n.gettext("sidebar.ingestion_header"))
     if st.button(i18n.gettext("sidebar.trigger_ingestion")):
@@ -128,10 +130,23 @@ else:
     st.session_state["graph_focus_selection"] = AUTO_FOCUS
     st.session_state["graph_focus_anchor"] = None
 
+def _handle_chapter_regenerated(updated_paper: dict[str, Any]) -> None:
+    load_papers.clear()
+    load_paper_graph.clear()
+    load_network_graph.clear()
+    st.session_state["selected_paper"] = updated_paper
+    st.session_state["selected_paper_id"] = updated_paper.get("paper_id")
+    st.session_state["graph_focus_selection"] = AUTO_FOCUS
+    st.session_state["graph_focus_anchor"] = updated_paper.get("paper_id")
+    st.rerun()
+
+
 render_chapter_viewer(
     selected_paper,
     paper_graph=paper_graph,
     translation=i18n,
+    backend_client=client,
+    on_regenerated=_handle_chapter_regenerated,
 )
 
 try:

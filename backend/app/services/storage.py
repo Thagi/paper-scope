@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from pydantic import ValidationError
 
 from backend.app.schemas import LLMAnalysis, PaperRecord
 
@@ -45,3 +48,28 @@ class StorageService:
         path = self.metadata_path(record)
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str))
         return path
+
+    def read_metadata(self, storage_path: Path | str) -> dict[str, Any] | None:
+        """Load the stored metadata manifest for a paper."""
+
+        manifest = Path(storage_path) / "metadata.json"
+        if not manifest.exists():
+            return None
+        try:
+            return json.loads(manifest.read_text())
+        except json.JSONDecodeError:  # pragma: no cover - defensive path
+            return None
+
+    def load_record(self, storage_path: Path | str) -> PaperRecord | None:
+        """Reconstruct the original :class:`PaperRecord` from metadata."""
+
+        data = self.read_metadata(storage_path)
+        if not data:
+            return None
+        record_payload = data.get("record")
+        if not isinstance(record_payload, dict):
+            return None
+        try:
+            return PaperRecord.model_validate(record_payload)
+        except ValidationError:  # pragma: no cover - validation errors are rare but handled
+            return None

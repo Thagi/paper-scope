@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
+import httpx
 import streamlit as st
 
+from services.backend import BackendClient
 from services.i18n import TranslationManager
 
 
@@ -14,14 +16,22 @@ def render_chapter_viewer(
     *,
     paper_graph: dict[str, Any] | None,
     translation: TranslationManager,
+    backend_client: BackendClient | None = None,
+    on_regenerated: Callable[[dict[str, Any]], None] | None = None,
 ) -> None:
     """Render a narrative-first view of the selected paper."""
 
     st.subheader(translation.gettext("chapter_viewer.header"))
+    if st.session_state.pop("chapter_regeneration_success", False):
+        st.success(translation.gettext("chapter_viewer.regenerate_success"))
+    error_message = st.session_state.pop("chapter_regeneration_error", None)
+    if error_message:
+        st.error(error_message)
     if not paper:
         st.info(translation.gettext("chapter_viewer.no_paper"))
         return
 
+    paper_id = paper.get("paper_id") or paper.get("external_id")
     nodes = (paper_graph or {}).get("nodes", [])
     node_by_id = {str(node.get("id")): node for node in nodes if node.get("id")}
     label_lookup = {
@@ -33,6 +43,31 @@ def render_chapter_viewer(
     left, right = st.columns([3, 2], gap="large")
     with left:
         st.markdown(f"### {paper.get('title', 'Untitled')}")
+        if backend_client and paper_id:
+            if st.button(
+                translation.gettext("chapter_viewer.regenerate_button"),
+                key="chapter_regenerate_button",
+            ):
+                with st.spinner(translation.gettext("chapter_viewer.regenerate_running")):
+                    try:
+                        updated = backend_client.regenerate_chapters(paper_id)
+                    except httpx.HTTPError as exc:
+                        st.session_state[
+                            "chapter_regeneration_error"
+                        ] = translation.gettext(
+                            "chapter_viewer.regenerate_error", error=str(exc)
+                        )
+                        st.rerun()
+                    else:
+                        st.session_state["chapter_regeneration_success"] = True
+                        if on_regenerated:
+                            on_regenerated(updated)
+                        else:
+                            st.session_state["selected_paper"] = updated
+                            st.session_state["selected_paper_id"] = updated.get(
+                                "paper_id"
+                            )
+                            st.rerun()
         st.markdown(f"#### {translation.gettext('chapter_viewer.summary')}")
         summary_text = translation.translate_text(paper.get("summary"))
         if summary_text:
@@ -113,7 +148,7 @@ def render_chapter_viewer(
                         ):
                             if node_id:
                                 st.session_state["graph_focus_selection"] = node_id
-                                st.experimental_rerun()
+                                st.rerun()
             else:
                 st.caption(translation.gettext("chapter_viewer.no_concepts"))
 

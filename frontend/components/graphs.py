@@ -257,7 +257,7 @@ def _render_focus_details(
                     ):
                         st.session_state["selected_paper_id"] = neighbor_id
                         st.session_state["graph_focus_selection"] = AUTO_FOCUS
-                        st.experimental_rerun()
+                        st.rerun()
         else:
             st.caption(translation.gettext("graph_overview.no_related"))
 
@@ -583,7 +583,7 @@ def _render_related_papers(
                     key=f"focus_{entry['paper_id']}",
                 ):
                     st.session_state["selected_paper_id"] = entry["paper_id"]
-                    st.experimental_rerun()
+                    st.rerun()
 
 
 def _count_nodes(graph: dict[str, Any] | None, node_type: str) -> int:

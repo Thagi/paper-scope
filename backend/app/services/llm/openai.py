@@ -14,6 +14,10 @@ from backend.app.schemas import (
     LLMRelationship,
     PaperRecord,
 )
+from backend.app.services.llm.utils import (
+    build_structured_user_prompt,
+    extract_pdf_excerpt,
+)
 
 from .base import LLMClient
 
@@ -31,18 +35,21 @@ class OpenAILLMClient(LLMClient):
     async def analyze(
         self, record: PaperRecord, *, pdf_path: str | None = None
     ) -> LLMAnalysis:
-        system_prompt = (
-            "You are a research assistant that writes concise JSON summaries for academic papers. "
-            "Always return valid JSON matching the schema {summary: string, key_points: string[], "
-            "concepts: {name: string, description: string}[], relationships: {source: string, target: string, relation: string}[], "
-            "chapters: {title: string, explanation: string, related_concepts: (string | {label: string, type?: string})[]}[]}."
+        pdf_excerpt = extract_pdf_excerpt(pdf_path) if pdf_path else ""
+        user_prompt = build_structured_user_prompt(
+            record, pdf_excerpt=pdf_excerpt or None
         )
-        user_prompt = (
-            f"Title: {record.title}\n"
-            f"Source: {record.source}\n"
-            f"Authors: {', '.join(record.authors) if record.authors else 'Unknown'}\n"
-            f"Abstract: {record.abstract or 'Not provided'}\n"
-            "Return a structured JSON summary."
+        system_prompt = (
+            "You are an expert research assistant producing exhaustive yet precise JSON "
+            "summaries for academic papers. Always respond with valid JSON that matches "
+            "the schema {summary: string, key_points: string[], concepts: {name: string, "
+            "description: string}[], relationships: {source: string, target: string, "
+            "relation: string}[], chapters: {title: string, explanation: string, "
+            "related_concepts: (string | {label: string, node_type?: string, normalized?: string})[]}[]}. "
+            "Ensure each chapter explanation contains multiple sentences that capture "
+            "the technical substance of the section, referencing methodology, "
+            "experiments, and findings. If the provided context lacks detail, note the "
+            "limitation instead of fabricating content."
         )
         payload = {
             "model": self._model,
