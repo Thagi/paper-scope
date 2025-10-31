@@ -10,13 +10,14 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from services.i18n import TranslationManager
 
-def render_insights(papers: list[dict[str, Any]]) -> None:
+def render_insights(papers: list[dict[str, Any]], *, translation: TranslationManager) -> None:
     """Render analytics about the currently ingested papers."""
 
-    st.subheader("Library Insights")
+    st.subheader(translation.gettext("insights.library_insights"))
     if not papers:
-        st.info("Ingest papers to unlock trend analytics and coverage metrics.")
+        st.info(translation.gettext("insights.no_papers"))
         return
 
     total = len(papers)
@@ -26,19 +27,34 @@ def render_insights(papers: list[dict[str, Any]]) -> None:
 
     coverage_cols = st.columns(3)
     coverage_cols[0].metric(
-        "Tagged Papers",
+        translation.gettext("insights.tagged_papers"),
         f"{with_tags}/{total}",
-        delta=f"{(with_tags / total * 100):.0f}% coverage" if total else None,
+        delta=
+        translation.gettext(
+            "insights.coverage_delta", percentage=(with_tags / total * 100)
+        )
+        if total
+        else None,
     )
     coverage_cols[1].metric(
-        "Summaries Available",
+        translation.gettext("insights.summaries_available"),
         f"{with_summaries}/{total}",
-        delta=f"{(with_summaries / total * 100):.0f}% coverage" if total else None,
+        delta=
+        translation.gettext(
+            "insights.coverage_delta", percentage=(with_summaries / total * 100)
+        )
+        if total
+        else None,
     )
     coverage_cols[2].metric(
-        "PDFs Stored",
+        translation.gettext("insights.pdfs_stored"),
         f"{with_pdfs}/{total}",
-        delta=f"{(with_pdfs / total * 100):.0f}% coverage" if total else None,
+        delta=
+        translation.gettext(
+            "insights.coverage_delta", percentage=(with_pdfs / total * 100)
+        )
+        if total
+        else None,
     )
 
     top_tags = _build_top_tags(papers)
@@ -48,43 +64,45 @@ def render_insights(papers: list[dict[str, Any]]) -> None:
     charts = st.columns(2)
     with charts[0]:
         if top_tags.empty:
-            st.caption(
-                "Tag coverage insights will appear after enrichment tags are populated."
-            )
+            st.caption(translation.gettext("insights.tags_caption"))
         else:
             fig = px.bar(
                 top_tags,
                 x="count",
                 y="tag",
                 orientation="h",
-                labels={"tag": "Tag", "count": "Papers"},
-                title="Top Tags",
+                labels={
+                    "tag": translation.gettext("insights.tag_label"),
+                    "count": translation.gettext("insights.count_label"),
+                },
+                title=translation.gettext("insights.top_tags"),
             )
             fig.update_layout(margin=dict(l=0, r=10, t=40, b=0))
             st.plotly_chart(fig, use_container_width=True)
 
     with charts[1]:
         if timeline.empty:
-            st.caption(
-                "Publication timeline will appear when papers include publication dates."
-            )
+            st.caption(translation.gettext("insights.timeline_caption"))
         else:
             fig = px.line(
                 timeline,
                 x="year",
                 y="count",
                 markers=True,
-                labels={"year": "Year", "count": "Papers"},
-                title="Publication Timeline",
+                labels={
+                    "year": translation.gettext("insights.year_label"),
+                    "count": translation.gettext("insights.count_label"),
+                },
+                title=translation.gettext("insights.timeline_title"),
             )
             fig.update_layout(margin=dict(l=10, r=0, t=40, b=0))
             st.plotly_chart(fig, use_container_width=True)
 
     if not top_authors.empty:
-        st.markdown("##### Prolific Authors")
+        st.markdown(f"##### {translation.gettext('insights.prolific_authors')}")
         st.dataframe(top_authors, hide_index=True, use_container_width=True)
     else:
-        st.caption("Author insights will appear once author metadata is available.")
+        st.caption(translation.gettext("insights.authors_caption"))
 
 
 def _build_top_tags(papers: list[dict[str, Any]]) -> pd.DataFrame:

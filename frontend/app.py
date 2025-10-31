@@ -11,6 +11,11 @@ from components.insights import render_insights
 from components.paper_browser import render_paper_browser
 from components.pdf_viewer import render_pdf_viewer
 from services.backend import get_backend_client
+from services.i18n import (
+    SUPPORTED_LANGUAGES,
+    get_translation_manager,
+    set_language,
+)
 
 
 st.set_page_config(page_title="Paper Scope", layout="wide")
@@ -47,43 +52,64 @@ def load_pdf_bytes(paper_id: str) -> bytes | None:
         return None
 
 
-st.title("📚 Paper Scope")
-st.caption(
-    "Monitor trending research, summarize insights, and explore knowledge graphs."
-)
+if "language" not in st.session_state:
+    st.session_state["language"] = "ja"
+
+i18n = get_translation_manager()
+
+st.title(i18n.gettext("app.title"))
+st.caption(i18n.gettext("app.caption"))
 
 with st.sidebar:
-    st.header("Ingestion Controls")
-    if st.button("Trigger Ingestion"):
-        with st.spinner("Running ingestion pipeline..."):
+    language_codes = list(SUPPORTED_LANGUAGES)
+    selected_language = st.selectbox(
+        i18n.gettext("sidebar.language"),
+        language_codes,
+        index=language_codes.index(i18n.language),
+        format_func=lambda code: SUPPORTED_LANGUAGES[code],
+    )
+    if selected_language != i18n.language:
+        set_language(selected_language)
+        st.experimental_rerun()
+
+    st.header(i18n.gettext("sidebar.ingestion_header"))
+    if st.button(i18n.gettext("sidebar.trigger_ingestion")):
+        with st.spinner(i18n.gettext("sidebar.trigger_ingestion_running")):
             try:
                 result = client.trigger_ingestion()
                 st.session_state["last_ingestion"] = result
-                st.success("Ingestion completed successfully.")
+                st.success(i18n.gettext("sidebar.trigger_ingestion_success"))
                 load_papers.clear()
                 load_network_graph.clear()
                 load_paper_graph.clear()
                 load_pdf_bytes.clear()
             except httpx.HTTPError as exc:
-                st.error(f"Failed to trigger ingestion: {exc}")
+                st.error(i18n.gettext("sidebar.trigger_ingestion_failure", error=exc))
     st.divider()
     last_run = st.session_state.get("last_ingestion")
+    metric_label = i18n.gettext("sidebar.last_persisted")
     if last_run:
-        st.metric("Last Persisted", last_run.get("persisted", 0))
+        st.metric(metric_label, last_run.get("persisted", 0))
     else:
-        st.metric("Last Persisted", "—")
+        st.metric(metric_label, "—")
 
 try:
     papers = load_papers()
 except httpx.HTTPError as exc:
-    st.error(f"Unable to load papers: {exc}")
+    st.error(i18n.gettext("load_papers_error", error=exc))
     papers = []
 
-render_dashboard(papers, last_ingestion=st.session_state.get("last_ingestion"))
-render_insights(papers)
+render_dashboard(
+    papers,
+    last_ingestion=st.session_state.get("last_ingestion"),
+    translation=i18n,
+)
+render_insights(papers, translation=i18n)
 
 selected_id = render_paper_browser(
-    papers, selected_id=st.session_state.get("selected_paper_id")
+    papers,
+    selected_id=st.session_state.get("selected_paper_id"),
+    translation=i18n,
 )
 st.session_state["selected_paper_id"] = selected_id
 selected_paper = next(
@@ -98,21 +124,27 @@ if selected_id:
     try:
         paper_graph = load_paper_graph(selected_id)
     except httpx.HTTPError as exc:
-        st.warning(f"Could not load paper graph: {exc}")
+        st.warning(i18n.gettext("load_paper_graph_warning", error=exc))
     pdf_url = f"{client.public_base_url}/papers/{selected_id}/pdf"
     pdf_bytes = load_pdf_bytes(selected_id)
 
-render_pdf_viewer(selected_paper, pdf_url=pdf_url, pdf_bytes=pdf_bytes)
+render_pdf_viewer(
+    selected_paper,
+    pdf_url=pdf_url,
+    pdf_bytes=pdf_bytes,
+    translation=i18n,
+)
 
 try:
     network_graph = load_network_graph()
 except httpx.HTTPError as exc:
-    st.warning(f"Unable to load network graph: {exc}")
-    network_graph = None
+        st.warning(i18n.gettext("load_network_graph_warning", error=exc))
+        network_graph = None
 
 render_graph_overview(
     paper_graph,
     network_graph,
     papers=papers,
     selected_paper_id=st.session_state.get("selected_paper_id"),
+    translation=i18n,
 )

@@ -8,18 +8,20 @@ from typing import Any
 import streamlit as st
 import streamlit.components.v1 as components
 
+from services.i18n import TranslationManager
 
 def render_pdf_viewer(
     paper: dict[str, Any] | None,
     *,
     pdf_url: str | None,
     pdf_bytes: bytes | None,
+    translation: TranslationManager,
 ) -> None:
     """Render the PDF workspace for a selected paper."""
 
-    st.subheader("PDF Workspace")
+    st.subheader(translation.gettext("pdf_viewer.header"))
     if not paper:
-        st.info("Select a paper from the list to view its PDF and summary.")
+        st.info(translation.gettext("pdf_viewer.no_paper"))
         return
 
     storage_path_obj = paper.get("storage_path")
@@ -33,29 +35,37 @@ def render_pdf_viewer(
         st.markdown(f"### {paper.get('title', 'Untitled')}")
         toolbar = st.columns([1, 1, 2])
         with toolbar[0]:
-            st.caption("PDF Actions")
+            st.caption(translation.gettext("pdf_viewer.pdf_actions"))
             if pdf_exists and pdf_url:
                 st.link_button(
-                    "Download PDF",
+                    translation.gettext("pdf_viewer.download_pdf"),
                     pdf_url,
                     use_container_width=True,
                 )
             else:
-                st.button("Download PDF", disabled=True, use_container_width=True)
+                st.button(
+                    translation.gettext("pdf_viewer.download_pdf"),
+                    disabled=True,
+                    use_container_width=True,
+                )
         with toolbar[1]:
-            st.caption("Open in new tab")
+            st.caption(translation.gettext("pdf_viewer.open_in_new_tab"))
             if pdf_exists and pdf_url:
-                st.link_button("Open Viewer", pdf_url, use_container_width=True)
+                st.link_button(
+                    translation.gettext("pdf_viewer.open_viewer"),
+                    pdf_url,
+                    use_container_width=True,
+                )
             elif pdf_exists:
-                st.caption("File stored inside container")
+                st.caption(translation.gettext("pdf_viewer.file_stored"))
             else:
-                st.caption("PDF pending download")
+                st.caption(translation.gettext("pdf_viewer.pdf_pending"))
         with toolbar[2]:
-            st.caption("Storage Path")
+            st.caption(translation.gettext("pdf_viewer.storage_path"))
             if storage_path_obj:
                 st.code(str(storage_path_obj), line_numbers=False)
             else:
-                st.caption("Not persisted yet")
+                st.caption(translation.gettext("pdf_viewer.not_persisted"))
 
         if pdf_available:
             b64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
@@ -64,29 +74,43 @@ def render_pdf_viewer(
             """
             components.html(iframe, height=740)
         else:
-            st.warning(
-                "PDF is not available for this paper yet. Trigger ingestion to download it."
-            )
+            st.warning(translation.gettext("pdf_viewer.pdf_missing"))
 
     with right:
         summary_tab, key_points_tab, metadata_tab = st.tabs(
-            ["Summary", "Highlights", "Metadata"]
+            [
+                translation.gettext("pdf_viewer.summary_tab"),
+                translation.gettext("pdf_viewer.highlights_tab"),
+                translation.gettext("pdf_viewer.metadata_tab"),
+            ]
         )
         with summary_tab:
-            st.write(paper.get("summary") or "Summary unavailable.")
+            summary_text = translation.translate_text(paper.get("summary"))
+            st.write(summary_text or translation.gettext("pdf_viewer.summary_unavailable"))
         with key_points_tab:
             key_points = paper.get("key_points") or []
             if key_points:
-                st.markdown("\n".join(f"- {point}" for point in key_points))
+                translated_points = translation.translate_list(key_points)
+                st.markdown("\n".join(f"- {point}" for point in translated_points))
             else:
-                st.caption("No key points generated yet.")
+                st.caption(translation.gettext("pdf_viewer.no_key_points"))
         with metadata_tab:
             st.write(
                 {
-                    "Source": paper.get("source") or "huggingface",
-                    "Authors": ", ".join(paper.get("authors", [])) or "Unknown",
-                    "Tags": ", ".join(paper.get("tags", [])) or "None",
-                    "Published": paper.get("published_at") or "Unknown",
-                    "Paper ID": paper_id,
+                    translation.gettext("pdf_viewer.source"): paper.get("source")
+                    or "huggingface",
+                    translation.gettext("pdf_viewer.authors"): ", ".join(
+                        paper.get("authors", [])
+                    )
+                    or translation.gettext("paper_browser.unknown_authors"),
+                    translation.gettext("pdf_viewer.tags"): ", ".join(
+                        paper.get("tags", [])
+                    )
+                    or translation.gettext("paper_browser.no_tags"),
+                    translation.gettext("pdf_viewer.published"): paper.get(
+                        "published_at"
+                    )
+                    or translation.gettext("paper_browser.unknown_published"),
+                    translation.gettext("pdf_viewer.paper_id"): paper_id,
                 }
             )
