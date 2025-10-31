@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import httpx
 import streamlit as st
 
+import httpx
+
+from components.chapter_viewer import render_chapter_viewer
 from components.dashboard import render_dashboard
-from components.graphs import render_graph_overview
+from components.graphs import AUTO_FOCUS, render_graph_overview
 from components.insights import render_insights
 from components.paper_browser import render_paper_browser
-from components.pdf_viewer import render_pdf_viewer
 from services.backend import get_backend_client
 from services.i18n import (
     SUPPORTED_LANGUAGES,
@@ -27,6 +28,10 @@ if "selected_paper_id" not in st.session_state:
     st.session_state["selected_paper_id"] = None
 if "last_ingestion" not in st.session_state:
     st.session_state["last_ingestion"] = None
+if "graph_focus_selection" not in st.session_state:
+    st.session_state["graph_focus_selection"] = AUTO_FOCUS
+if "graph_focus_anchor" not in st.session_state:
+    st.session_state["graph_focus_anchor"] = None
 
 
 @st.cache_data(ttl=60)
@@ -42,14 +47,6 @@ def load_paper_graph(paper_id: str) -> dict:
 @st.cache_data(ttl=300)
 def load_network_graph(limit: int = 50) -> dict:
     return client.fetch_network(limit=limit)
-
-
-@st.cache_data(ttl=600)
-def load_pdf_bytes(paper_id: str) -> bytes | None:
-    try:
-        return client.fetch_pdf(paper_id)
-    except httpx.HTTPError:
-        return None
 
 
 if "language" not in st.session_state:
@@ -82,7 +79,6 @@ with st.sidebar:
                 load_papers.clear()
                 load_network_graph.clear()
                 load_paper_graph.clear()
-                load_pdf_bytes.clear()
             except httpx.HTTPError as exc:
                 st.error(i18n.gettext("sidebar.trigger_ingestion_failure", error=exc))
     st.divider()
@@ -118,33 +114,40 @@ selected_paper = next(
 st.session_state["selected_paper"] = selected_paper
 
 paper_graph = None
-pdf_url = None
-pdf_bytes = None
 if selected_id:
     try:
         paper_graph = load_paper_graph(selected_id)
     except httpx.HTTPError as exc:
         st.warning(i18n.gettext("load_paper_graph_warning", error=exc))
-    pdf_url = f"{client.public_base_url}/papers/{selected_id}/pdf"
-    pdf_bytes = load_pdf_bytes(selected_id)
 
-render_pdf_viewer(
+    current_anchor = st.session_state.get("graph_focus_anchor")
+    if current_anchor != selected_id:
+        st.session_state["graph_focus_selection"] = AUTO_FOCUS
+        st.session_state["graph_focus_anchor"] = selected_id
+else:
+    st.session_state["graph_focus_selection"] = AUTO_FOCUS
+    st.session_state["graph_focus_anchor"] = None
+
+render_chapter_viewer(
     selected_paper,
-    pdf_url=pdf_url,
-    pdf_bytes=pdf_bytes,
+    paper_graph=paper_graph,
     translation=i18n,
 )
 
 try:
     network_graph = load_network_graph()
 except httpx.HTTPError as exc:
-        st.warning(i18n.gettext("load_network_graph_warning", error=exc))
-        network_graph = None
+    st.warning(i18n.gettext("load_network_graph_warning", error=exc))
+    network_graph = None
 
-render_graph_overview(
+focus_selection = st.session_state.get("graph_focus_selection", AUTO_FOCUS)
+updated_focus = render_graph_overview(
     paper_graph,
     network_graph,
     papers=papers,
     selected_paper_id=st.session_state.get("selected_paper_id"),
+    focus_selection=focus_selection,
     translation=i18n,
 )
+if updated_focus != focus_selection:
+    st.session_state["graph_focus_selection"] = updated_focus

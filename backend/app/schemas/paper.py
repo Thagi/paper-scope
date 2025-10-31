@@ -13,14 +13,24 @@ class PaperRecord(BaseModel):
     """Metadata describing a paper discovered during ingestion."""
 
     external_id: str = Field(..., description="Canonical identifier (e.g., arXiv ID).")
-    source: str = Field(..., description="Ingestion source identifier (huggingface, arxiv, etc.).")
+    source: str = Field(
+        ..., description="Ingestion source identifier (huggingface, arxiv, etc.)."
+    )
     title: str = Field(..., description="Title of the paper.")
     abstract: str | None = Field(default=None, description="Abstract or summary text.")
-    authors: list[str] = Field(default_factory=list, description="List of author names.")
+    authors: list[str] = Field(
+        default_factory=list, description="List of author names."
+    )
     pdf_url: HttpUrl = Field(..., description="URL to download the paper PDF.")
-    landing_url: HttpUrl | None = Field(default=None, description="Human-friendly landing page for the paper.")
-    published_at: datetime | None = Field(default=None, description="Publication timestamp when available.")
-    tags: list[str] = Field(default_factory=list, description="Categorical tags for the paper.")
+    landing_url: HttpUrl | None = Field(
+        default=None, description="Human-friendly landing page for the paper."
+    )
+    published_at: datetime | None = Field(
+        default=None, description="Publication timestamp when available."
+    )
+    tags: list[str] = Field(
+        default_factory=list, description="Categorical tags for the paper."
+    )
 
     def storage_key(self) -> str:
         """Generate a filesystem-friendly key for storage paths."""
@@ -35,6 +45,34 @@ class LLMConcept(BaseModel):
     description: str | None = None
 
 
+class ChapterConcept(BaseModel):
+    """Reference to a knowledge-graph node mentioned within a chapter."""
+
+    label: str = Field(
+        ..., description="Human-readable label shown in the chapter text."
+    )
+    normalized: str | None = Field(
+        default=None, description="Normalized identifier aligned with concept nodes."
+    )
+    node_type: str | None = Field(
+        default=None,
+        description="Optional node type hint (Paper, Concept, Author, etc.).",
+    )
+
+
+class LLMChapter(BaseModel):
+    """LLM generated explanation for a single chapter or section."""
+
+    title: str = Field(..., description="Chapter or section title.")
+    explanation: str = Field(
+        ..., description="Detailed narrative describing the chapter."
+    )
+    related_concepts: list[ChapterConcept] = Field(
+        default_factory=list,
+        description="List of graph concepts referenced in the explanation.",
+    )
+
+
 class LLMRelationship(BaseModel):
     """Relationship triple derived from the paper."""
 
@@ -47,9 +85,19 @@ class LLMAnalysis(BaseModel):
     """LLM generated insights for a paper."""
 
     summary: str = Field(..., description="High-level summary text.")
-    key_points: list[str] = Field(default_factory=list, description="Key bullet point highlights.")
-    concepts: list[LLMConcept] = Field(default_factory=list, description="Extracted concepts.")
-    relationships: list[LLMRelationship] = Field(default_factory=list, description="Graph relationships.")
+    key_points: list[str] = Field(
+        default_factory=list, description="Key bullet point highlights."
+    )
+    concepts: list[LLMConcept] = Field(
+        default_factory=list, description="Extracted concepts."
+    )
+    relationships: list[LLMRelationship] = Field(
+        default_factory=list, description="Graph relationships."
+    )
+    chapters: list[LLMChapter] = Field(
+        default_factory=list,
+        description="Detailed chapter-by-chapter explanations.",
+    )
 
 
 class PaperIngestionResult(BaseModel):
@@ -58,9 +106,15 @@ class PaperIngestionResult(BaseModel):
     discovered: int = Field(..., description="Total papers discovered from sources.")
     downloaded: int = Field(..., description="Number of PDFs downloaded in this run.")
     enriched: int = Field(..., description="Number of papers enriched via LLM.")
-    persisted: int = Field(..., description="Number of papers persisted to the graph database.")
-    manual_trigger: bool = Field(default=False, description="Whether the run was manually triggered.")
-    details: list[dict[str, Any]] = Field(default_factory=list, description="Per-paper diagnostic details.")
+    persisted: int = Field(
+        ..., description="Number of papers persisted to the graph database."
+    )
+    manual_trigger: bool = Field(
+        default=False, description="Whether the run was manually triggered."
+    )
+    details: list[dict[str, Any]] = Field(
+        default_factory=list, description="Per-paper diagnostic details."
+    )
 
 
 class StoredPaper(BaseModel):
@@ -76,6 +130,7 @@ class StoredPaper(BaseModel):
     published_at: datetime | None = None
     storage_path: Path | None = None
     key_points: list[str] = Field(default_factory=list)
+    chapters: list[LLMChapter] = Field(default_factory=list)
 
 
 class GraphNode(BaseModel):

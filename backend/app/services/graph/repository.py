@@ -90,6 +90,33 @@ class Neo4jGraphRepository:
                     rel["target_display"] = target
                     rel["target_normalized"] = self._normalize_concept_name(target)
                     rel.setdefault("relation", "RELATED")
+            for chapter in analysis_payload.get("chapters", []):
+                related = chapter.get("related_concepts")
+                if not isinstance(related, list):
+                    chapter["related_concepts"] = []
+                    continue
+                normalized_entries: list[dict[str, Any]] = []
+                for concept in related:
+                    if isinstance(concept, dict):
+                        label = concept.get("label") or concept.get("name")
+                        if not label:
+                            continue
+                        normalized = concept.get(
+                            "normalized"
+                        ) or self._normalize_concept_name(label)
+                        entry: dict[str, Any] = {
+                            "label": label,
+                            "normalized": normalized,
+                        }
+                        node_type = concept.get("node_type")
+                        if node_type:
+                            entry["node_type"] = node_type
+                    else:
+                        label = str(concept)
+                        normalized = self._normalize_concept_name(label)
+                        entry = {"label": label, "normalized": normalized}
+                    normalized_entries.append(entry)
+                chapter["related_concepts"] = normalized_entries
 
             await session.execute_write(
                 self._upsert_paper_tx,
@@ -158,6 +185,7 @@ class Neo4jGraphRepository:
                     if node.get("storage_path")
                     else None,
                     key_points=node.get("key_points", []),
+                    chapters=node.get("chapters", []),
                 )
             )
         return papers
@@ -187,6 +215,7 @@ class Neo4jGraphRepository:
             if node.get("storage_path")
             else None,
             key_points=node.get("key_points", []),
+            chapters=node.get("chapters", []),
         )
 
     @staticmethod
@@ -356,6 +385,7 @@ class Neo4jGraphRepository:
                 p.published_at = $record.published_at,
                 p.summary = $analysis.summary,
                 p.key_points = $analysis.key_points,
+                p.chapters = $analysis.chapters,
                 p.storage_path = $storage_path,
                 p.updated_at = datetime(),
                 p.created_at = coalesce(p.created_at, datetime())
