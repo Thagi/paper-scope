@@ -6,7 +6,14 @@ import json
 
 import httpx
 
-from backend.app.schemas import LLMAnalysis, LLMConcept, LLMRelationship, PaperRecord
+from backend.app.schemas import (
+    ChapterConcept,
+    LLMAnalysis,
+    LLMChapter,
+    LLMConcept,
+    LLMRelationship,
+    PaperRecord,
+)
 
 from .base import LLMClient
 
@@ -21,11 +28,14 @@ class OpenAILLMClient(LLMClient):
         self._model = model
         self._endpoint = "https://api.openai.com/v1/chat/completions"
 
-    async def analyze(self, record: PaperRecord, *, pdf_path: str | None = None) -> LLMAnalysis:
+    async def analyze(
+        self, record: PaperRecord, *, pdf_path: str | None = None
+    ) -> LLMAnalysis:
         system_prompt = (
             "You are a research assistant that writes concise JSON summaries for academic papers. "
             "Always return valid JSON matching the schema {summary: string, key_points: string[], "
-            "concepts: {name: string, description: string}[], relationships: {source: string, target: string, relation: string}[]}."
+            "concepts: {name: string, description: string}[], relationships: {source: string, target: string, relation: string}[], "
+            "chapters: {title: string, explanation: string, related_concepts: (string | {label: string, type?: string})[]}[]}."
         )
         user_prompt = (
             f"Title: {record.title}\n"
@@ -72,9 +82,38 @@ class OpenAILLMClient(LLMClient):
             if item.get("target")
         ]
         summary = parsed.get("summary") or record.abstract or record.title
+        chapters: list[LLMChapter] = []
+        for item in parsed.get("chapters", []):
+            if not isinstance(item, dict):
+                continue
+            title = item.get("title") or item.get("name")
+            explanation = item.get("explanation") or item.get("summary")
+            if not title:
+                continue
+            if not explanation:
+                explanation = summary
+            concept_entries: list[ChapterConcept] = []
+            for raw_concept in item.get("related_concepts", []) or []:
+                if isinstance(raw_concept, dict):
+                    label = raw_concept.get("label") or raw_concept.get("name")
+                    node_type = raw_concept.get("type") or raw_concept.get("node_type")
+                else:
+                    label = str(raw_concept)
+                    node_type = None
+                if not label:
+                    continue
+                concept_entries.append(ChapterConcept(label=label, node_type=node_type))
+            chapters.append(
+                LLMChapter(
+                    title=title,
+                    explanation=explanation,
+                    related_concepts=concept_entries,
+                )
+            )
         return LLMAnalysis(
             summary=summary,
             key_points=key_points,
             concepts=concepts,
             relationships=relationships,
+            chapters=chapters,
         )
