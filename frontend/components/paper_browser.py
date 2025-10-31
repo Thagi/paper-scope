@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import streamlit as st
@@ -119,7 +119,8 @@ def _sort_papers(
     return sorted(
         papers,
         key=lambda item: (
-            _parse_datetime(item.get("published_at")) or datetime.min,
+            _parse_datetime(item.get("published_at"))
+            or datetime.min.replace(tzinfo=timezone.utc),
             item.get("title", "").lower(),
         ),
         reverse=reverse,
@@ -141,10 +142,11 @@ def _parse_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
     if isinstance(value, str):
         try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
         except ValueError:
             return None
     return None
