@@ -88,7 +88,8 @@ def _graph_to_figure(
         return go.Figure()
 
     pos = nx.spring_layout(G, seed=42, k=0.6 / max(len(G.nodes), 1))
-    highlight_nodes = highlight_nodes or set()
+    graph_nodes = set(G.nodes)
+    highlight_nodes = (highlight_nodes or set()) & graph_nodes
     neighbor_nodes: set[str] = set()
     for node_id in highlight_nodes:
         neighbor_nodes.update(G.neighbors(node_id))
