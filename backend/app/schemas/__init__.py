@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from .paper import (
+    ChapterConcept,
     GraphEdge,
     GraphNode,
     LLMAnalysis,
+    LLMChapter,
     LLMConcept,
     LLMRelationship,
     PaperGraph,
@@ -15,9 +17,11 @@ from .paper import (
 )
 
 __all__ = [
+    "ChapterConcept",
     "GraphEdge",
     "GraphNode",
     "LLMAnalysis",
+    "LLMChapter",
     "LLMConcept",
     "LLMRelationship",
     "PaperGraph",
