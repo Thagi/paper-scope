@@ -48,6 +48,11 @@ This document outlines the phased roadmap for building the Paper Scope platform.
 4. **Search & Browsing**
    - Search bar for titles/authors; list view of ingested papers with tags.
 
+## Phase 3a – UX Enhancements (In Progress)
+- Add a Library Insights panel surfacing coverage metrics (tags, summaries, PDFs) to highlight ingestion completeness.
+- Provide trend visualisations for top tags and publication timelines to quickly gauge topical focus.
+- Iteratively expand quick actions in the paper browser (e.g., saved filters, bulk tagging) based on user feedback.
+
 ## Phase 4 – Notifications & Extensions
 - Implement change detection (new versions, new connections) and queue email notifications (via SMTP / third-party).
 - Add user preferences for notification subscriptions.

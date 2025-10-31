@@ -17,7 +17,9 @@ def render_dashboard(
 
     st.subheader("Ingestion Overview")
     cols = st.columns(3)
-    total_sources = sorted({paper.get("source", "unknown") for paper in papers}) or ["N/A"]
+    total_sources = sorted({paper.get("source", "unknown") for paper in papers}) or [
+        "N/A"
+    ]
     last_status = last_ingestion.get("persisted") if last_ingestion else 0
     stats = [
         ("Tracked Papers", str(len(papers))),
@@ -44,7 +46,9 @@ def render_dashboard(
         with st.expander("Recent Paper Highlights", expanded=True):
             st.write(
                 "Newest Papers:",
-                ", ".join(paper.get("title", "") for paper in papers[:3]) if papers else "None",
+                ", ".join(paper.get("title", "") for paper in papers[:3])
+                if papers
+                else "None",
             )
             if years:
                 st.caption(f"Median publication year: {statistics.median(years):.0f}")
