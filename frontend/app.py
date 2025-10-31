@@ -6,9 +6,10 @@ import httpx
 import streamlit as st
 
 from components.dashboard import render_dashboard
-from components.pdf_viewer import render_pdf_viewer
 from components.graphs import render_graph_overview
+from components.insights import render_insights
 from components.paper_browser import render_paper_browser
+from components.pdf_viewer import render_pdf_viewer
 from services.backend import get_backend_client
 
 
@@ -79,6 +80,7 @@ except httpx.HTTPError as exc:
     papers = []
 
 render_dashboard(papers, last_ingestion=st.session_state.get("last_ingestion"))
+render_insights(papers)
 
 selected_id = render_paper_browser(
     papers, selected_id=st.session_state.get("selected_paper_id")

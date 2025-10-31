@@ -64,10 +64,14 @@ def render_pdf_viewer(
             """
             components.html(iframe, height=740)
         else:
-            st.warning("PDF is not available for this paper yet. Trigger ingestion to download it.")
+            st.warning(
+                "PDF is not available for this paper yet. Trigger ingestion to download it."
+            )
 
     with right:
-        summary_tab, key_points_tab, metadata_tab = st.tabs(["Summary", "Highlights", "Metadata"])
+        summary_tab, key_points_tab, metadata_tab = st.tabs(
+            ["Summary", "Highlights", "Metadata"]
+        )
         with summary_tab:
             st.write(paper.get("summary") or "Summary unavailable.")
         with key_points_tab:
