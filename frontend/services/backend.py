@@ -48,6 +48,11 @@ class BackendClient:
     def fetch_pdf(self, external_id: str) -> bytes:
         return self._request("GET", f"/papers/{external_id}/pdf")
 
+    def regenerate_chapters(self, external_id: str) -> dict[str, Any]:
+        """Trigger regeneration of chapter explanations for a paper."""
+
+        return self._request("POST", f"/papers/{external_id}/chapters/regenerate")
+
     @property
     def base_url(self) -> str:
         return self._base_url
