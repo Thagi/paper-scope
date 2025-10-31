@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections import defaultdict
 from datetime import datetime
-import re
 from pathlib import Path
 from typing import Any
 
@@ -90,39 +91,56 @@ class Neo4jGraphRepository:
                     rel["target_display"] = target
                     rel["target_normalized"] = self._normalize_concept_name(target)
                     rel.setdefault("relation", "RELATED")
+            chapters_payload: list[dict[str, Any]] = []
             for chapter in analysis_payload.get("chapters", []):
-                related = chapter.get("related_concepts")
-                if not isinstance(related, list):
-                    chapter["related_concepts"] = []
+                if not isinstance(chapter, dict):
                     continue
+                title = chapter.get("title") or chapter.get("name")
+                explanation = chapter.get("explanation") or chapter.get("summary")
+                if not title:
+                    continue
+                if not explanation:
+                    explanation = analysis_payload.get("summary") or title
+                related = chapter.get("related_concepts")
                 normalized_entries: list[dict[str, Any]] = []
-                for concept in related:
-                    if isinstance(concept, dict):
-                        label = concept.get("label") or concept.get("name")
-                        if not label:
-                            continue
-                        normalized = concept.get(
-                            "normalized"
-                        ) or self._normalize_concept_name(label)
-                        entry: dict[str, Any] = {
-                            "label": label,
-                            "normalized": normalized,
-                        }
-                        node_type = concept.get("node_type")
-                        if node_type:
-                            entry["node_type"] = node_type
-                    else:
-                        label = str(concept)
-                        normalized = self._normalize_concept_name(label)
-                        entry = {"label": label, "normalized": normalized}
-                    normalized_entries.append(entry)
-                chapter["related_concepts"] = normalized_entries
+                if isinstance(related, list):
+                    for concept in related:
+                        if isinstance(concept, dict):
+                            label = concept.get("label") or concept.get("name")
+                            if not label:
+                                continue
+                            normalized = concept.get(
+                                "normalized"
+                            ) or self._normalize_concept_name(label)
+                            entry: dict[str, Any] = {
+                                "label": str(label),
+                                "normalized": str(normalized),
+                            }
+                            node_type = concept.get("node_type") or concept.get("type")
+                            if node_type:
+                                entry["node_type"] = str(node_type)
+                        else:
+                            label = str(concept)
+                            if not label:
+                                continue
+                            normalized = self._normalize_concept_name(label)
+                            entry = {"label": label, "normalized": str(normalized)}
+                        normalized_entries.append(entry)
+                sanitized_chapter = {
+                    "title": str(title),
+                    "explanation": str(explanation),
+                    "related_concepts": normalized_entries,
+                }
+                chapters_payload.append(sanitized_chapter)
+            analysis_payload["chapters"] = chapters_payload
+            chapters_json = json.dumps(chapters_payload, ensure_ascii=False)
 
             await session.execute_write(
                 self._upsert_paper_tx,
                 record=record_payload,
                 analysis=analysis_payload,
                 storage_path=str(storage_path),
+                chapters_json=chapters_json,
             )
 
     async def get_recent_papers(self, limit: int) -> list[StoredPaper]:
@@ -185,7 +203,9 @@ class Neo4jGraphRepository:
                     if node.get("storage_path")
                     else None,
                     key_points=node.get("key_points", []),
-                    chapters=node.get("chapters", []),
+                    chapters=Neo4jGraphRepository._deserialize_chapters(
+                        node.get("chapters_json") or node.get("chapters")
+                    ),
                 )
             )
         return papers
@@ -215,7 +235,9 @@ class Neo4jGraphRepository:
             if node.get("storage_path")
             else None,
             key_points=node.get("key_points", []),
-            chapters=node.get("chapters", []),
+            chapters=Neo4jGraphRepository._deserialize_chapters(
+                node.get("chapters_json") or node.get("chapters")
+            ),
         )
 
     @staticmethod
@@ -370,7 +392,12 @@ class Neo4jGraphRepository:
 
     @staticmethod
     async def _upsert_paper_tx(
-        tx, *, record: dict, analysis: dict, storage_path: str
+        tx,
+        *,
+        record: dict,
+        analysis: dict,
+        storage_path: str,
+        chapters_json: str,
     ) -> None:
         await (
             await tx.run(
@@ -385,7 +412,7 @@ class Neo4jGraphRepository:
                 p.published_at = $record.published_at,
                 p.summary = $analysis.summary,
                 p.key_points = $analysis.key_points,
-                p.chapters = $analysis.chapters,
+                p.chapters_json = $chapters_json,
                 p.storage_path = $storage_path,
                 p.updated_at = datetime(),
                 p.created_at = coalesce(p.created_at, datetime())
@@ -417,6 +444,7 @@ class Neo4jGraphRepository:
                 record=record,
                 analysis=analysis,
                 storage_path=storage_path,
+                chapters_json=chapters_json,
             )
         ).consume()
 
@@ -490,3 +518,68 @@ class Neo4jGraphRepository:
             except Exception:  # pragma: no cover - safeguard
                 return None
         return None
+
+    @staticmethod
+    def _deserialize_chapters(value: Any) -> list[dict[str, Any]]:
+        """Return a list of chapter payloads from stored Neo4j properties."""
+
+        if not value:
+            return []
+        chapters: list[dict[str, Any]] = []
+        raw_entries: list[Any]
+        if isinstance(value, str):
+            raw_entries = [value]
+        elif isinstance(value, list):
+            raw_entries = value
+        else:
+            return []
+
+        for entry in raw_entries:
+            if isinstance(entry, dict):
+                chapters.append(entry)
+                continue
+            if not isinstance(entry, str):
+                continue
+            try:
+                parsed = json.loads(entry)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict):
+                        chapters.append(item)
+            elif isinstance(parsed, dict):
+                chapters.append(parsed)
+        normalized: list[dict[str, Any]] = []
+        for chapter in chapters:
+            if not isinstance(chapter, dict):
+                continue
+            title = chapter.get("title") or chapter.get("name")
+            explanation = chapter.get("explanation") or chapter.get("summary")
+            related_raw = chapter.get("related_concepts")
+            related: list[dict[str, Any]] = []
+            if isinstance(related_raw, list):
+                for concept in related_raw:
+                    if not isinstance(concept, dict):
+                        continue
+                    label = concept.get("label") or concept.get("name")
+                    if not label:
+                        continue
+                    entry: dict[str, Any] = {"label": str(label)}
+                    normalized_value = concept.get("normalized")
+                    if normalized_value:
+                        entry["normalized"] = str(normalized_value)
+                    node_type = concept.get("node_type") or concept.get("type")
+                    if node_type:
+                        entry["node_type"] = str(node_type)
+                    related.append(entry)
+            if not title and not explanation and not related:
+                continue
+            normalized.append(
+                {
+                    "title": str(title) if title else "",
+                    "explanation": str(explanation) if explanation else "",
+                    "related_concepts": related,
+                }
+            )
+        return normalized
