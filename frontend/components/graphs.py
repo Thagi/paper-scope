@@ -22,13 +22,18 @@ def render_graph_overview(
     selected_paper_id: str | None,
     focus_selection: str,
     translation: TranslationManager,
-) -> str:
-    """Render paper-level and cross-paper knowledge graphs."""
+) -> tuple[str, str | None]:
+    """Render paper-level and cross-paper knowledge graphs.
+
+    Returns a tuple containing the active focus selection and an optional
+    paper identifier that should become the newly selected paper when a related
+    node is chosen from the focus panel.
+    """
 
     st.subheader(translation.gettext("graph_overview.header"))
     if not paper_graph and not network_graph:
         st.info(translation.gettext("graph_overview.no_data"))
-        return focus_selection
+        return focus_selection, None
 
     metrics = st.columns(3)
     metrics[0].metric(
@@ -68,6 +73,7 @@ def render_graph_overview(
     st.caption(translation.gettext("graph_overview.instructions"))
 
     focus_node_id = default_focus if selected_option == AUTO_FOCUS else selected_option
+    requested_paper_id: str | None = None
 
     selected_tab, network_tab = st.tabs(
         [
@@ -94,12 +100,14 @@ def render_graph_overview(
                     f"##### {translation.gettext('graph_overview.key_concepts')}"
                 )
                 st.dataframe(concept_rows, hide_index=True, use_container_width=True)
-            _render_focus_details(
+            focus_request = _render_focus_details(
                 paper_graph,
                 network_graph,
                 focus_node_id,
                 translation=translation,
             )
+            if not requested_paper_id:
+                requested_paper_id = focus_request
         else:
             st.info(translation.gettext("graph_overview.select_paper_prompt"))
 
@@ -112,13 +120,17 @@ def render_graph_overview(
             )
             related = _extract_related_papers(network_graph, focus_node_id, papers)
             if related:
-                _render_related_papers(related, translation=translation)
+                related_request = _render_related_papers(
+                    related, translation=translation
+                )
+                if not requested_paper_id:
+                    requested_paper_id = related_request
             else:
                 st.caption(translation.gettext("graph_overview.no_related"))
         else:
             st.info(translation.gettext("graph_overview.network_wait"))
 
-    return selected_option
+    return selected_option, requested_paper_id
 
 
 def _collect_focus_nodes(
@@ -179,24 +191,29 @@ def _render_focus_details(
     focus_node_id: str | None,
     *,
     translation: TranslationManager,
-) -> None:
-    """Render contextual details for the currently focused node."""
+) -> str | None:
+    """Render contextual details for the currently focused node.
+
+    Returns the identifier of a paper that should be loaded when a related
+    paper button is selected, otherwise ``None``.
+    """
 
     st.markdown(f"##### {translation.gettext('graph_overview.focus_details_header')}")
     if not focus_node_id:
         st.caption(translation.gettext("graph_overview.no_focus_details"))
-        return
+        return None
 
     node = _find_node(paper_graph, focus_node_id) or _find_node(
         network_graph, focus_node_id
     )
     if not node:
         st.caption(translation.gettext("graph_overview.no_focus_details"))
-        return
+        return None
 
     node_label = node.get("label", focus_node_id)
     node_type = node.get("type", "Node")
     metadata = node.get("metadata") or {}
+    requested_paper_id: str | None = None
 
     st.markdown(f"**{node_label}**")
     st.caption(f"{translation.gettext('graph_overview.focus_type_label')}: {node_type}")
@@ -255,11 +272,11 @@ def _render_focus_details(
                         translation.gettext("graph_overview.focus_in_app"),
                         key=f"focus_neighbor_{focus_node_id}_{neighbor_id}",
                     ):
-                        st.session_state["selected_paper_id"] = neighbor_id
-                        st.session_state["graph_focus_selection"] = AUTO_FOCUS
-                        st.rerun()
+                        requested_paper_id = neighbor_id
         else:
             st.caption(translation.gettext("graph_overview.no_related"))
+
+    return requested_paper_id
 
 
 def _find_node(
@@ -544,10 +561,15 @@ def _extract_related_papers(
 
 def _render_related_papers(
     related: list[dict[str, Any]], *, translation: TranslationManager
-) -> None:
-    """Render a list of related papers with quick actions."""
+) -> str | None:
+    """Render a list of related papers with quick actions.
+
+    Returns the identifier of a paper chosen via the "focus in app" button,
+    if any were activated during this render pass.
+    """
 
     st.markdown(f"##### {translation.gettext('graph_overview.related_papers')}")
+    requested_paper_id: str | None = None
     for entry in related:
         shared_concepts = ", ".join(
             entry.get("shared_concepts") or []
@@ -582,8 +604,9 @@ def _render_related_papers(
                     translation.gettext("graph_overview.focus_in_app"),
                     key=f"focus_{entry['paper_id']}",
                 ):
-                    st.session_state["selected_paper_id"] = entry["paper_id"]
-                    st.rerun()
+                    requested_paper_id = entry["paper_id"]
+
+    return requested_paper_id
 
 
 def _count_nodes(graph: dict[str, Any] | None, node_type: str) -> int:

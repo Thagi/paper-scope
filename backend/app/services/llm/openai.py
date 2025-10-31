@@ -46,10 +46,11 @@ class OpenAILLMClient(LLMClient):
             "description: string}[], relationships: {source: string, target: string, "
             "relation: string}[], chapters: {title: string, explanation: string, "
             "related_concepts: (string | {label: string, node_type?: string, normalized?: string})[]}[]}. "
-            "Ensure each chapter explanation contains multiple sentences that capture "
-            "the technical substance of the section, referencing methodology, "
-            "experiments, and findings. If the provided context lacks detail, note the "
-            "limitation instead of fabricating content."
+            "Ensure each chapter explanation spans at least four sentences grouped into "
+            "clear paragraphs that capture the technical substance of the section, "
+            "referencing methodology, experiments, datasets, and findings while tying "
+            "concept names to potential knowledge-graph anchors. If the provided "
+            "context lacks detail, note the limitation instead of fabricating content."
         )
         payload = {
             "model": self._model,

@@ -156,7 +156,7 @@ except httpx.HTTPError as exc:
     network_graph = None
 
 focus_selection = st.session_state.get("graph_focus_selection", AUTO_FOCUS)
-updated_focus = render_graph_overview(
+updated_focus, requested_paper = render_graph_overview(
     paper_graph,
     network_graph,
     papers=papers,
@@ -166,3 +166,12 @@ updated_focus = render_graph_overview(
 )
 if updated_focus != focus_selection:
     st.session_state["graph_focus_selection"] = updated_focus
+if requested_paper:
+    if requested_paper != st.session_state.get("selected_paper_id"):
+        st.session_state["selected_paper_id"] = requested_paper
+        st.session_state["graph_focus_selection"] = AUTO_FOCUS
+        st.session_state["graph_focus_anchor"] = requested_paper
+        load_paper_graph.clear()
+        load_papers.clear()
+        load_network_graph.clear()
+        st.rerun()

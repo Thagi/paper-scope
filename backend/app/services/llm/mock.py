@@ -44,7 +44,10 @@ class MockLLMClient(LLMClient):
                     f"The authors position {tag} as a central motif in their study, "
                     f"bridging prior literature with the contribution of {record.title}. "
                     f"They describe concrete design choices that operationalise {tag} "
-                    "and discuss anticipated trade-offs the reader should be aware of."
+                    "and discuss anticipated trade-offs the reader should be aware of.\n\n"
+                    "Subsequent experiments revisit the concept through ablation-style "
+                    "analysis, contrasting alternative baselines and reporting signal-to-"
+                    "noise trade-offs that motivate future investigation."
                 )
                 chapters.append(
                     LLMChapter(

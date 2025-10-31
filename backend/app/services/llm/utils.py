@@ -96,10 +96,14 @@ def build_structured_user_prompt(
         "Construct a meticulous chapter-by-chapter explanation of the paper. "
         "Organise the response into 4-7 sections that mirror the logical flow "
         "(problem framing, methodology, experiments, results, implications). "
-        "Each chapter explanation must contain multiple sentences, highlight "
-        "important equations or techniques, and clarify why they matter. "
-        "When the excerpt lacks details, explicitly state the limitation "
-        "rather than fabricating content."
+        "Each chapter explanation must contain at least four sentences split "
+        "across coherent paragraphs: begin by summarising the section's goal, "
+        "then dive into concrete mechanisms (models, algorithms, datasets, "
+        "training signals, evaluation setups), and conclude with the impact or "
+        "design trade-offs. Explicitly mention terminology that should map to "
+        "knowledge-graph concepts so downstream tooling can anchor nodes. "
+        "When the excerpt lacks details, acknowledge the gap explicitly instead "
+        "of fabricating content."
     )
 
     sections.append(guidance)

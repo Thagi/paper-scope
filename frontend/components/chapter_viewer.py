@@ -148,7 +148,6 @@ def render_chapter_viewer(
                         ):
                             if node_id:
                                 st.session_state["graph_focus_selection"] = node_id
-                                st.rerun()
             else:
                 st.caption(translation.gettext("chapter_viewer.no_concepts"))
 
